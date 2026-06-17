@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">双摄同步相机</string>
+    <string name="camera_permission_rationale">需要相机权限以同时使用前后摄像头进行拍摄</string>
+    <string name="microphone_permission_rationale">需要麦克风权限以录制音频</string>
+    <string name="storage_permission_rationale">需要存储权限以保存拍摄的文件</string>
+    <string name="dual_camera_not_supported">您的设备不支持同时打开前后摄像头，将使用单摄像头模式</string>
+    <string name="recording">录制中</string>
+    <string name="paused">已暂停</string>
+    <string name="stop">停止</string>
+    <string name="take_photo">拍照</string>
+    <string name="switch_camera">切换摄像头</string>
+    <string name="layout_pip">画中画</string>
+    <string name="layout_split">分屏</string>
+    <string name="layout_free">自由布局</string>
+    <string name="gallery">作品库</string>
+    <string name="settings">设置</string>
+    <string name="no_media">暂无作品</string>
+    <string name="storage_usage">存储占用</string>
+    <string name="share">分享</string>
+    <string name="delete">删除</string>
+    <string name="rename">重命名</string>
+</resources>

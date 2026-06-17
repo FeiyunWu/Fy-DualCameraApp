@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#FF1976D2</color>
+    <color name="primary_variant">#FF1565C0</color>
+    <color name="secondary">#FF7B1FA2</color>
+    <color name="background">#FFF5F5F5</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="on_secondary">#FFFFFFFF</color>
+    <color name="on_background">#FF1C1B1F</color>
+    <color name="on_surface">#FF1C1B1F</color>
+    <color name="record_red">#FFF44336</color>
+    <color name="record_pause">#FFFF9800</color>
+    <color name="pip_border">#FFFFFFFF</color>
+    <color name="overlay_bg">#99000000</color>
+</resources>
