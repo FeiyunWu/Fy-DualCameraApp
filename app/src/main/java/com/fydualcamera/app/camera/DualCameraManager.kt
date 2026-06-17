@@ -25,10 +25,10 @@ import com.fydualcamera.app.layout.LayoutMode
 import com.fydualcamera.app.util.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import androidx.core.util.Consumer
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.function.Consumer
 
 class DualCameraManager(
     private val context: Context,
@@ -261,7 +261,7 @@ class DualCameraManager(
             try {
                 val frontOptions = FileOutputOptions.Builder(frontFile).build()
                 frontRecording = frontVideoCapture?.output?.prepareRecording(context, frontOptions)
-                    ?.start(executor, Consumer { event ->
+                    ?.start(executor, Consumer<VideoRecordEvent> { event ->
                         if (event is VideoRecordEvent.Finalize) {
                             val entity = MediaEntity(
                                 fileName = frontFile.name,
@@ -281,7 +281,7 @@ class DualCameraManager(
                 val backOptions = FileOutputOptions.Builder(backFile).build()
                 backRecording = backVideoCapture?.output?.prepareRecording(context, backOptions)
                     ?.withAudioEnabled()
-                    ?.start(executor, Consumer { event ->
+                    ?.start(executor, Consumer<VideoRecordEvent> { event ->
                         if (event is VideoRecordEvent.Finalize) {
                             val entity = MediaEntity(
                                 fileName = backFile.name,
