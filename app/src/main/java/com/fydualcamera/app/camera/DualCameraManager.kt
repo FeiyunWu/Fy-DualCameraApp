@@ -267,7 +267,6 @@ class DualCameraManager(
                                 fileName = frontFile.name,
                                 filePath = frontFile.absolutePath,
                                 type = "video_front",
-                                durationMs = event.recordingDuration,
                                 sizeBytes = frontFile.length()
                             )
                             onMediaSaved?.invoke(entity)
@@ -287,7 +286,6 @@ class DualCameraManager(
                                 fileName = backFile.name,
                                 filePath = backFile.absolutePath,
                                 type = "video_back",
-                                durationMs = event.recordingDuration,
                                 sizeBytes = backFile.length()
                             )
                             onMediaSaved?.invoke(entity)
