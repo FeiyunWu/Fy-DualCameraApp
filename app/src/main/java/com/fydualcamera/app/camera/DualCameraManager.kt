@@ -263,7 +263,7 @@ class DualCameraManager(
                 val frontFile = File(videoDir, FileUtils.generateVideoFileName("VID_FRONT"))
                 val options = FileOutputOptions.Builder(frontFile).build()
                 val pending = frontVc.output.prepareRecording(context, options)
-                frontRecording = pending.start(executor, Consumer { event: VideoRecordEvent ->
+                frontRecording = pending.start(executor, Consumer<VideoRecordEvent> { event ->
                     if (event is VideoRecordEvent.Finalize) {
                         onMediaSaved?.invoke(MediaEntity(
                             fileName = frontFile.name,
@@ -281,7 +281,7 @@ class DualCameraManager(
                 val backFile = File(videoDir, FileUtils.generateVideoFileName("VID_BACK"))
                 val options = FileOutputOptions.Builder(backFile).build()
                 val pending = backVc.output.prepareRecording(context, options).withAudioEnabled()
-                backRecording = pending.start(executor, Consumer { event: VideoRecordEvent ->
+                backRecording = pending.start(executor, Consumer<VideoRecordEvent> { event ->
                     if (event is VideoRecordEvent.Finalize) {
                         onMediaSaved?.invoke(MediaEntity(
                             fileName = backFile.name,
