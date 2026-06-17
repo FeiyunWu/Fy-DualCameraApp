@@ -16,10 +16,7 @@ object FileUtils {
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault())
 
     fun getAppOutputDir(context: Context): File {
-        val dir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-            APP_DIR
-        )
+        val dir = File(context.filesDir, APP_DIR)
         if (!dir.exists()) dir.mkdirs()
         return dir
     }

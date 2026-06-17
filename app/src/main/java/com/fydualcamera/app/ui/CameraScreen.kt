@@ -36,10 +36,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +54,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fydualcamera.app.camera.DualCameraManager
+import com.fydualcamera.app.db.AppDatabase
 import com.fydualcamera.app.layout.LayoutMode
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -60,13 +64,44 @@ fun CameraScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val dualCameraManager = remember { DualCameraManager(context, lifecycleOwner) }
+    val scope = rememberCoroutineScope()
+    val db = remember { AppDatabase.getInstance(context) }
+    val mediaDao = remember { db.mediaDao() }
 
     var layoutMode by remember { mutableStateOf(LayoutMode.PIP) }
-    var isRecording by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var splitRatio by remember { mutableFloatStateOf(0.5f) }
     var pipOffsetX by remember { mutableFloatStateOf(0f) }
     var pipOffsetY by remember { mutableFloatStateOf(0f) }
+
+    val isRecording by dualCameraManager.isRecording.collectAsState()
+
+    // Create PreviewViews ONCE and reuse across layouts
+    val backPreview = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+    }
+    val frontPreview = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+    }
+
+    // Set preview views once
+    LaunchedEffect(Unit) {
+        dualCameraManager.backPreviewView = backPreview
+        dualCameraManager.frontPreviewView = frontPreview
+    }
+
+    // Handle media saved -> insert into DB
+    LaunchedEffect(Unit) {
+        dualCameraManager.onMediaSaved = { entity ->
+            scope.launch { mediaDao.insert(entity) }
+        }
+    }
 
     val requiredPermissions = arrayOf(
         Manifest.permission.CAMERA,
@@ -77,8 +112,7 @@ fun CameraScreen() {
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        val allGranted = granted.values.all { it }
-        permissionsGranted = allGranted
+        permissionsGranted = granted.values.all { it }
     }
 
     LaunchedEffect(Unit) {
@@ -105,35 +139,123 @@ fun CameraScreen() {
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            when (layoutMode) {
-                LayoutMode.PIP -> PipLayout(
-                    pipOffsetX = pipOffsetX,
-                    pipOffsetY = pipOffsetY,
-                    onPipDrag = { dx, dy ->
-                        pipOffsetX += dx
-                        pipOffsetY += dy
-                    },
-                    onBackCreated = { dualCameraManager.backPreviewView = it },
-                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
-                )
-                LayoutMode.LEFT_RIGHT -> LeftRightLayout(
-                    splitRatio = splitRatio,
-                    onSplitChange = { splitRatio = it },
-                    onBackCreated = { dualCameraManager.backPreviewView = it },
-                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
-                )
-                LayoutMode.TOP_BOTTOM -> TopBottomLayout(
-                    splitRatio = splitRatio,
-                    onSplitChange = { splitRatio = it },
-                    onBackCreated = { dualCameraManager.backPreviewView = it },
-                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
-                )
-                LayoutMode.FREE -> FreeLayout(
-                    onBackCreated = { dualCameraManager.backPreviewView = it },
-                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
+            AndroidView(
+                factory = { backPreview },
+                modifier = when (layoutMode) {
+                    LayoutMode.PIP -> Modifier.fillMaxSize()
+                    LayoutMode.LEFT_RIGHT -> Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(splitRatio)
+                        .align(Alignment.CenterStart)
+                    LayoutMode.TOP_BOTTOM -> Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(splitRatio)
+                        .align(Alignment.TopCenter)
+                    LayoutMode.FREE -> Modifier.fillMaxSize()
+                }
+            )
+
+            AndroidView(
+                factory = { frontPreview },
+                modifier = when (layoutMode) {
+                    LayoutMode.PIP -> Modifier
+                        .offset { IntOffset(pipOffsetX.roundToInt(), pipOffsetY.roundToInt()) }
+                        .size(120.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(2.dp, Color.White, RoundedCornerShape(12.dp))
+                        .align(Alignment.BottomEnd)
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                pipOffsetX += dragAmount.x
+                                pipOffsetY += dragAmount.y
+                            }
+                        }
+                    LayoutMode.LEFT_RIGHT -> Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(1f - splitRatio)
+                        .align(Alignment.CenterEnd)
+                    LayoutMode.TOP_BOTTOM -> Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(1f - splitRatio)
+                        .align(Alignment.BottomCenter)
+                    LayoutMode.FREE -> Modifier
+                        .size(150.dp)
+                        .align(Alignment.Center)
+                }
+            )
+
+            // Split divider for LEFT_RIGHT
+            if (layoutMode == LayoutMode.LEFT_RIGHT) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .background(Color.White)
+                        .align(Alignment.CenterStart)
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                splitRatio = (splitRatio + dragAmount.x / 1000f).coerceIn(0.2f, 0.8f)
+                            }
+                        }
                 )
             }
 
+            // Split divider for TOP_BOTTOM
+            if (layoutMode == LayoutMode.TOP_BOTTOM) {
+                Box(
+                    modifier = Modifier
+                        .height(4.dp)
+                        .fillMaxWidth()
+                        .background(Color.White)
+                        .align(Alignment.TopCenter)
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                splitRatio = (splitRatio + dragAmount.y / 1000f).coerceIn(0.2f, 0.8f)
+                            }
+                        }
+                )
+            }
+
+            // Layout mode labels
+            if (layoutMode == LayoutMode.LEFT_RIGHT) {
+                Text(
+                    text = "← 拖动分割线调整比例 →",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(Color(0x88000000), RoundedCornerShape(4.dp))
+                        .padding(4.dp)
+                )
+            }
+            if (layoutMode == LayoutMode.TOP_BOTTOM) {
+                Text(
+                    text = "拖动分割线调整比例",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(Color(0x88000000), RoundedCornerShape(4.dp))
+                        .padding(4.dp)
+                )
+            }
+            if (layoutMode == LayoutMode.FREE) {
+                Text(
+                    text = "自由布局: 拖拽移动, 缩放调整大小",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 48.dp)
+                        .background(Color(0x88000000), RoundedCornerShape(4.dp))
+                        .padding(4.dp)
+                )
+            }
+
+            // Layout mode buttons
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -150,6 +272,7 @@ fun CameraScreen() {
             }
         }
 
+        // Bottom controls
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -169,7 +292,10 @@ fun CameraScreen() {
             if (isRecording) {
                 if (isPaused) {
                     FloatingActionButton(
-                        onClick = { isPaused = false },
+                        onClick = {
+                            isPaused = false
+                            dualCameraManager.startRecording()
+                        },
                         containerColor = Color(0xFFFF9800),
                         modifier = Modifier.size(64.dp)
                     ) {
@@ -182,7 +308,10 @@ fun CameraScreen() {
                     }
                 } else {
                     FloatingActionButton(
-                        onClick = { isPaused = true },
+                        onClick = {
+                            isPaused = true
+                            dualCameraManager.stopRecording()
+                        },
                         containerColor = Color(0xFFF44336),
                         modifier = Modifier.size(64.dp)
                     ) {
@@ -196,7 +325,10 @@ fun CameraScreen() {
                 }
 
                 FloatingActionButton(
-                    onClick = { isRecording = false; isPaused = false },
+                    onClick = {
+                        isPaused = false
+                        dualCameraManager.stopRecording()
+                    },
                     containerColor = Color(0xFF757575),
                     modifier = Modifier.size(48.dp)
                 ) {
@@ -208,7 +340,7 @@ fun CameraScreen() {
                 }
             } else {
                 FloatingActionButton(
-                    onClick = { isRecording = true },
+                    onClick = { dualCameraManager.startRecording() },
                     containerColor = Color(0xFFF44336),
                     modifier = Modifier.size(64.dp)
                 ) {
@@ -221,7 +353,7 @@ fun CameraScreen() {
                 }
             }
 
-            IconButton(onClick = { }) {
+            IconButton(onClick = { dualCameraManager.takePhoto() }) {
                 Icon(
                     Icons.Default.CameraAlt,
                     contentDescription = null,
@@ -255,198 +387,4 @@ private fun LayoutModeButton(mode: LayoutMode, isSelected: Boolean, onClick: () 
             style = MaterialTheme.typography.labelSmall
         )
     }
-}
-
-@Composable
-private fun PipLayout(
-    pipOffsetX: Float,
-    pipOffsetY: Float,
-    onPipDrag: (Float, Float) -> Unit,
-    onBackCreated: (PreviewView) -> Unit,
-    onFrontCreated: (PreviewView) -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        CameraPreviewView(
-            modifier = Modifier.fillMaxSize(),
-            isFront = false,
-            onCreated = onBackCreated
-        )
-
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(pipOffsetX.roundToInt(), pipOffsetY.roundToInt()) }
-                .size(120.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        onPipDrag(dragAmount.x, dragAmount.y)
-                    }
-                }
-                .clip(RoundedCornerShape(12.dp))
-                .border(2.dp, Color.White, RoundedCornerShape(12.dp))
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-        ) {
-            CameraPreviewView(
-                modifier = Modifier.fillMaxSize(),
-                isFront = true,
-                onCreated = onFrontCreated
-            )
-        }
-    }
-}
-
-@Composable
-private fun LeftRightLayout(
-    splitRatio: Float,
-    onSplitChange: (Float) -> Unit,
-    onBackCreated: (PreviewView) -> Unit,
-    onFrontCreated: (PreviewView) -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            CameraPreviewView(
-                modifier = Modifier
-                    .weight(splitRatio)
-                    .fillMaxHeight(),
-                isFront = false,
-                onCreated = onBackCreated
-            )
-
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .fillMaxHeight()
-                    .background(Color.White)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            onSplitChange((splitRatio + dragAmount.x / 1000f).coerceIn(0.2f, 0.8f))
-                        }
-                    }
-            )
-
-            CameraPreviewView(
-                modifier = Modifier
-                    .weight(1f - splitRatio)
-                    .fillMaxHeight(),
-                isFront = true,
-                onCreated = onFrontCreated
-            )
-        }
-
-        Text(
-            text = "← 拖动分割线调整比例 →",
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .background(Color(0x88000000), RoundedCornerShape(4.dp))
-                .padding(4.dp)
-        )
-    }
-}
-
-@Composable
-private fun TopBottomLayout(
-    splitRatio: Float,
-    onSplitChange: (Float) -> Unit,
-    onBackCreated: (PreviewView) -> Unit,
-    onFrontCreated: (PreviewView) -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            CameraPreviewView(
-                modifier = Modifier
-                    .weight(splitRatio)
-                    .fillMaxWidth(),
-                isFront = false,
-                onCreated = onBackCreated
-            )
-
-            Box(
-                modifier = Modifier
-                    .height(4.dp)
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            onSplitChange((splitRatio + dragAmount.y / 1000f).coerceIn(0.2f, 0.8f))
-                        }
-                    }
-            )
-
-            CameraPreviewView(
-                modifier = Modifier
-                    .weight(1f - splitRatio)
-                    .fillMaxWidth(),
-                isFront = true,
-                onCreated = onFrontCreated
-            )
-        }
-
-        Text(
-            text = "拖动分割线调整比例",
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .background(Color(0x88000000), RoundedCornerShape(4.dp))
-                .padding(4.dp)
-        )
-    }
-}
-
-@Composable
-private fun FreeLayout(
-    onBackCreated: (PreviewView) -> Unit,
-    onFrontCreated: (PreviewView) -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        CameraPreviewView(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
-            isFront = false,
-            onCreated = onBackCreated
-        )
-
-        CameraPreviewView(
-            modifier = Modifier
-                .size(150.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .border(2.dp, Color.White, RoundedCornerShape(12.dp))
-                .align(Alignment.Center),
-            isFront = true,
-            onCreated = onFrontCreated
-        )
-
-        Text(
-            text = "自由布局: 拖拽移动, 缩放调整大小",
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 48.dp)
-                .background(Color(0x88000000), RoundedCornerShape(4.dp))
-                .padding(4.dp)
-        )
-    }
-}
-
-@Composable
-private fun CameraPreviewView(
-    modifier: Modifier,
-    isFront: Boolean,
-    onCreated: (PreviewView) -> Unit
-) {
-    AndroidView(
-        factory = { ctx ->
-            PreviewView(ctx).apply {
-                scaleType = PreviewView.ScaleType.FILL_CENTER
-                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                onCreated(this)
-            }
-        },
-        modifier = modifier
-    )
 }
