@@ -113,8 +113,6 @@ class DualCameraManager(
             .requireLensFacing(CameraSelector.LENS_FACING_BACK)
             .build()
 
-        val qualitySelector = QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD))
-
         frontPreview = Preview.Builder()
             .setTargetRotation(rotation)
             .build()
@@ -123,85 +121,109 @@ class DualCameraManager(
             .setTargetRotation(rotation)
             .build()
 
-        frontVideoCapture = VideoCapture.withOutput(
-            Recorder.Builder().setQualitySelector(qualitySelector).build()
-        )
-        backVideoCapture = VideoCapture.withOutput(
-            Recorder.Builder().setQualitySelector(qualitySelector).build()
-        )
-
-        frontImageCapture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .setTargetRotation(rotation)
-            .build()
-
-        backImageCapture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .setTargetRotation(rotation)
-            .build()
-
+        // Always bind Preview-only for both cameras first (most reliable)
         var frontBound = false
         var backBound = false
 
         if (frontPreviewView != null) {
             try {
                 val pv = frontPreview
-                val vc = frontVideoCapture
-                val ic = frontImageCapture
-                if (pv != null && vc != null && ic != null) {
+                if (pv != null) {
                     pv.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
                     frontCamera = provider.bindToLifecycle(
-                        lifecycleOwner, frontSelector, pv, vc, ic
+                        lifecycleOwner, frontSelector, pv
                     )
                     frontBound = true
                 }
             } catch (e: Exception) {
-                Log.e("DualCamera", "Front bind (all) failed: ${e.message}")
-                frontVideoCapture = null
-                frontImageCapture = null
-                try {
-                    val pv = frontPreview
-                    if (pv != null && frontPreviewView != null) {
-                        pv.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
-                        frontCamera = provider.bindToLifecycle(
-                            lifecycleOwner, frontSelector, pv
-                        )
-                        frontBound = true
-                    }
-                } catch (e2: Exception) {
-                    Log.e("DualCamera", "Front bind (preview) failed: ${e2.message}")
-                }
+                Log.e("DualCamera", "Front bind failed: ${e.message}")
             }
         }
 
         if (backPreviewView != null) {
             try {
                 val pv = backPreview
-                val vc = backVideoCapture
-                val ic = backImageCapture
-                if (pv != null && vc != null && ic != null) {
+                if (pv != null) {
                     pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
                     backCamera = provider.bindToLifecycle(
-                        lifecycleOwner, backSelector, pv, vc, ic
+                        lifecycleOwner, backSelector, pv
                     )
                     backBound = true
                 }
             } catch (e: Exception) {
-                Log.e("DualCamera", "Back bind (all) failed: ${e.message}")
-                backVideoCapture = null
-                backImageCapture = null
-                try {
-                    val pv = backPreview
-                    if (pv != null && backPreviewView != null) {
-                        pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
-                        backCamera = provider.bindToLifecycle(
-                            lifecycleOwner, backSelector, pv
-                        )
-                        backBound = true
-                    }
-                } catch (e2: Exception) {
-                    Log.e("DualCamera", "Back bind (preview) failed: ${e2.message}")
+                Log.e("DualCamera", "Back bind failed: ${e.message}")
+            }
+        }
+
+        // Try to add ImageCapture for back camera if back preview was bound
+        if (backBound) {
+            try {
+                val ic = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setTargetRotation(rotation)
+                    .build()
+                backImageCapture = ic
+                // Rebinding with Preview + ImageCapture will briefly flash the preview
+                val pv = backPreview
+                val pvView = backPreviewView
+                if (pv != null && pvView != null) {
+                    pv.setSurfaceProvider(pvView.surfaceProvider)
+                    backCamera = provider.bindToLifecycle(
+                        lifecycleOwner, backSelector, pv, ic
+                    )
                 }
+            } catch (e: Exception) {
+                Log.e("DualCamera", "Back ImageCapture add failed: ${e.message}")
+                backImageCapture = null
+            }
+        }
+
+        if (frontBound) {
+            try {
+                val ic = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setTargetRotation(rotation)
+                    .build()
+                frontImageCapture = ic
+                val pv = frontPreview
+                val pvView = frontPreviewView
+                if (pv != null && pvView != null) {
+                    pv.setSurfaceProvider(pvView.surfaceProvider)
+                    frontCamera = provider.bindToLifecycle(
+                        lifecycleOwner, frontSelector, pv, ic
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("DualCamera", "Front ImageCapture add failed: ${e.message}")
+                frontImageCapture = null
+            }
+        }
+
+        // Try to add VideoCapture for back camera
+        if (backBound) {
+            try {
+                val qualitySelector = QualitySelector.from(
+                    Quality.FHD,
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)
+                )
+                val vc = VideoCapture.withOutput(
+                    Recorder.Builder().setQualitySelector(qualitySelector).build()
+                )
+                backVideoCapture = vc
+                val ic = backImageCapture
+                if (ic != null) {
+                    val pv = backPreview
+                    val pvView = backPreviewView
+                    if (pv != null && pvView != null) {
+                        pv.setSurfaceProvider(pvView.surfaceProvider)
+                        backCamera = provider.bindToLifecycle(
+                            lifecycleOwner, backSelector, pv, ic, vc
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DualCamera", "Back VideoCapture add failed: ${e.message}")
+                backVideoCapture = null
             }
         }
 
