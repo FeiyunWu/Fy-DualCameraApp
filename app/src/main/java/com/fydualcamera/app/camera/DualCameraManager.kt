@@ -1,18 +1,17 @@
 package com.fydualcamera.app.camera
 
-import android.Manifest
 import android.content.Context
+import android.hardware.display.DisplayManager
 import android.util.Size
 import android.view.Display
-import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
 import androidx.camera.video.VideoCapture
-import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -91,15 +90,17 @@ class DualCameraManager(
             .setTargetRotation(display?.rotation ?: android.view.Surface.ROTATION_0)
             .build()
 
-        frontVideoCapture = VideoCapture.Builder<VideoCapture<*>>()
+        val recorder = Recorder.Builder()
             .setQualitySelector(qualitySelector)
-            .setVideoFrameRate(30)
-            .build() as VideoCapture<*>?
+            .build()
 
-        backVideoCapture = VideoCapture.Builder<VideoCapture<*>>()
-            .setQualitySelector(qualitySelector)
+        frontVideoCapture = VideoCapture.Builder<Recorder>()
             .setVideoFrameRate(30)
-            .build() as VideoCapture<*>?
+            .build()
+
+        backVideoCapture = VideoCapture.Builder<Recorder>()
+            .setVideoFrameRate(30)
+            .build()
 
         try {
             if (frontPreviewView != null) {
@@ -139,8 +140,8 @@ class DualCameraManager(
     }
 
     private fun getDisplayCompat(): Display? {
-        return ContextCompat.getSystemService(context, android.hardware.display.DisplayManager::class.java)
-            ?.getDisplay(android.hardware.display.DisplayManager.DEFAULT_DISPLAY)
+        return context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            ?.getDisplay(Display.DEFAULT_DISPLAY)
     }
 
     fun startRecording(outputPathFront: String, outputPathBack: String) {
