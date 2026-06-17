@@ -158,11 +158,11 @@ fun CameraScreen() {
                 factory = { frontPreview },
                 modifier = when (layoutMode) {
                     LayoutMode.PIP -> Modifier
-                        .offset { IntOffset(pipOffsetX.roundToInt(), pipOffsetY.roundToInt()) }
                         .size(120.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .border(2.dp, Color.White, RoundedCornerShape(12.dp))
                         .align(Alignment.BottomEnd)
+                        .offset { IntOffset(pipOffsetX.roundToInt(), pipOffsetY.roundToInt()) }
                         .pointerInput(Unit) {
                             detectDragGestures { change, dragAmount ->
                                 change.consume()
@@ -184,38 +184,52 @@ fun CameraScreen() {
                 }
             )
 
-            // Split divider for LEFT_RIGHT
+            // Split divider for LEFT_RIGHT — at the right edge of the back camera area
             if (layoutMode == LayoutMode.LEFT_RIGHT) {
                 Box(
                     modifier = Modifier
-                        .width(4.dp)
+                        .fillMaxWidth(splitRatio)
                         .fillMaxHeight()
-                        .background(Color.White)
                         .align(Alignment.CenterStart)
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                splitRatio = (splitRatio + dragAmount.x / 1000f).coerceIn(0.2f, 0.8f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .background(Color.White)
+                            .align(Alignment.CenterEnd)
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    splitRatio = (splitRatio + dragAmount.x / 1000f).coerceIn(0.2f, 0.8f)
+                                }
                             }
-                        }
-                )
+                    )
+                }
             }
 
-            // Split divider for TOP_BOTTOM
+            // Split divider for TOP_BOTTOM — at the bottom edge of the back camera area
             if (layoutMode == LayoutMode.TOP_BOTTOM) {
                 Box(
                     modifier = Modifier
-                        .height(4.dp)
                         .fillMaxWidth()
-                        .background(Color.White)
+                        .fillMaxHeight(splitRatio)
                         .align(Alignment.TopCenter)
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                splitRatio = (splitRatio + dragAmount.y / 1000f).coerceIn(0.2f, 0.8f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(Color.White)
+                            .align(Alignment.BottomCenter)
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    splitRatio = (splitRatio + dragAmount.y / 1000f).coerceIn(0.2f, 0.8f)
+                                }
                             }
-                        }
-                )
+                    )
+                }
             }
 
             // Layout mode labels

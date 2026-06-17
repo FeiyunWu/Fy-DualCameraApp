@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -21,8 +20,7 @@ import androidx.compose.ui.Modifier
 
 enum class Screen(val label: String) {
     CAMERA("拍摄"),
-    GALLERY("作品库"),
-    SETTINGS("设置")
+    GALLERY("作品库")
 }
 
 @Composable
@@ -44,12 +42,7 @@ fun MainScreen() {
                     icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
                     label = { Text("作品库") }
                 )
-                NavigationBarItem(
-                    selected = currentScreen == Screen.SETTINGS,
-                    onClick = { currentScreen = Screen.SETTINGS },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    label = { Text("设置") }
-                )
+
             }
         }
     ) { innerPadding ->
@@ -61,7 +54,7 @@ fun MainScreen() {
             when (currentScreen) {
                 Screen.CAMERA -> CameraScreen()
                 Screen.GALLERY -> GalleryScreen()
-                Screen.SETTINGS -> SettingsScreen()
+
             }
         }
     }
