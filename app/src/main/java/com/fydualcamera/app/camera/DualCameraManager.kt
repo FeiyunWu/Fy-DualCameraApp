@@ -187,24 +187,21 @@ class DualCameraManager(
                     backBound = true
                 }
             } catch (e: Exception) {
-                Log.e("DualCamera", "Back bind failed: ${e.message}")
-            }
-        }
-
-        if (!frontBound && backPreviewView != null) {
-            try {
-                val pv = backPreview
-                val vc = backVideoCapture
-                val ic = backImageCapture
-                if (pv != null && vc != null && ic != null) {
-                    pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
-                    backCamera = provider.bindToLifecycle(
-                        lifecycleOwner, backSelector, pv, vc, ic
-                    )
-                    backBound = true
+                Log.e("DualCamera", "Back bind (all) failed: ${e.message}")
+                backVideoCapture = null
+                backImageCapture = null
+                try {
+                    val pv = backPreview
+                    if (pv != null && backPreviewView != null) {
+                        pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
+                        backCamera = provider.bindToLifecycle(
+                            lifecycleOwner, backSelector, pv
+                        )
+                        backBound = true
+                    }
+                } catch (e2: Exception) {
+                    Log.e("DualCamera", "Back bind (preview) failed: ${e2.message}")
                 }
-            } catch (e: Exception) {
-                Log.e("DualCamera", "Fallback back bind failed: ${e.message}")
             }
         }
 
