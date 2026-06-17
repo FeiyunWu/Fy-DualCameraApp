@@ -4,7 +4,6 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,8 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,7 +20,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -30,8 +27,6 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -51,17 +47,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.layout.fillMaxHeight
+import com.fydualcamera.app.camera.DualCameraManager
 import com.fydualcamera.app.layout.LayoutMode
 import kotlin.math.roundToInt
 
 @Composable
 fun CameraScreen() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val dualCameraManager = remember { DualCameraManager(context, lifecycleOwner) }
+
     var layoutMode by remember { mutableStateOf(LayoutMode.PIP) }
     var isRecording by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
@@ -78,11 +77,22 @@ fun CameraScreen() {
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        permissionsGranted = granted.values.all { it }
+        val allGranted = granted.values.all { it }
+        permissionsGranted = allGranted
     }
 
     LaunchedEffect(Unit) {
         permissionLauncher.launch(requiredPermissions)
+    }
+
+    LaunchedEffect(permissionsGranted) {
+        if (permissionsGranted) {
+            dualCameraManager.startCameras()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { dualCameraManager.release() }
     }
 
     Column(
@@ -102,14 +112,28 @@ fun CameraScreen() {
                     onPipDrag = { dx, dy ->
                         pipOffsetX += dx
                         pipOffsetY += dy
-                    }
+                    },
+                    onBackCreated = { dualCameraManager.backPreviewView = it },
+                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
                 )
-                LayoutMode.LEFT_RIGHT -> LeftRightLayout(splitRatio = splitRatio, onSplitChange = { splitRatio = it })
-                LayoutMode.TOP_BOTTOM -> TopBottomLayout(splitRatio = splitRatio, onSplitChange = { splitRatio = it })
-                LayoutMode.FREE -> FreeLayout()
+                LayoutMode.LEFT_RIGHT -> LeftRightLayout(
+                    splitRatio = splitRatio,
+                    onSplitChange = { splitRatio = it },
+                    onBackCreated = { dualCameraManager.backPreviewView = it },
+                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
+                )
+                LayoutMode.TOP_BOTTOM -> TopBottomLayout(
+                    splitRatio = splitRatio,
+                    onSplitChange = { splitRatio = it },
+                    onBackCreated = { dualCameraManager.backPreviewView = it },
+                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
+                )
+                LayoutMode.FREE -> FreeLayout(
+                    onBackCreated = { dualCameraManager.backPreviewView = it },
+                    onFrontCreated = { dualCameraManager.frontPreviewView = it }
+                )
             }
 
-            // Layout mode selector
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -126,7 +150,6 @@ fun CameraScreen() {
             }
         }
 
-        // Bottom controls
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -135,7 +158,7 @@ fun CameraScreen() {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { /* toggle flash */ }) {
+            IconButton(onClick = { }) {
                 Icon(
                     Icons.Default.FlipCameraAndroid,
                     contentDescription = null,
@@ -198,7 +221,7 @@ fun CameraScreen() {
                 }
             }
 
-            IconButton(onClick = { /* take photo */ }) {
+            IconButton(onClick = { }) {
                 Icon(
                     Icons.Default.CameraAlt,
                     contentDescription = null,
@@ -238,24 +261,20 @@ private fun LayoutModeButton(mode: LayoutMode, isSelected: Boolean, onClick: () 
 private fun PipLayout(
     pipOffsetX: Float,
     pipOffsetY: Float,
-    onPipDrag: (Float, Float) -> Unit
+    onPipDrag: (Float, Float) -> Unit,
+    onBackCreated: (PreviewView) -> Unit,
+    onFrontCreated: (PreviewView) -> Unit
 ) {
-    val density = LocalDensity.current
-
     Box(modifier = Modifier.fillMaxSize()) {
         CameraPreviewView(
             modifier = Modifier.fillMaxSize(),
-            isFront = false
+            isFront = false,
+            onCreated = onBackCreated
         )
 
         Box(
             modifier = Modifier
-                .offset {
-                    IntOffset(
-                        pipOffsetX.roundToInt(),
-                        pipOffsetY.roundToInt()
-                    )
-                }
+                .offset { IntOffset(pipOffsetX.roundToInt(), pipOffsetY.roundToInt()) }
                 .size(120.dp)
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
@@ -270,21 +289,28 @@ private fun PipLayout(
         ) {
             CameraPreviewView(
                 modifier = Modifier.fillMaxSize(),
-                isFront = true
+                isFront = true,
+                onCreated = onFrontCreated
             )
         }
     }
 }
 
 @Composable
-private fun LeftRightLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
+private fun LeftRightLayout(
+    splitRatio: Float,
+    onSplitChange: (Float) -> Unit,
+    onBackCreated: (PreviewView) -> Unit,
+    onFrontCreated: (PreviewView) -> Unit
+) {
     Box(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize()) {
             CameraPreviewView(
                 modifier = Modifier
                     .weight(splitRatio)
                     .fillMaxHeight(),
-                isFront = false
+                isFront = false,
+                onCreated = onBackCreated
             )
 
             Box(
@@ -295,9 +321,7 @@ private fun LeftRightLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
-                            val newRatio = (splitRatio + dragAmount.x / 1000f)
-                                .coerceIn(0.2f, 0.8f)
-                            onSplitChange(newRatio)
+                            onSplitChange((splitRatio + dragAmount.x / 1000f).coerceIn(0.2f, 0.8f))
                         }
                     }
             )
@@ -306,7 +330,8 @@ private fun LeftRightLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
                 modifier = Modifier
                     .weight(1f - splitRatio)
                     .fillMaxHeight(),
-                isFront = true
+                isFront = true,
+                onCreated = onFrontCreated
             )
         }
 
@@ -323,14 +348,20 @@ private fun LeftRightLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
 }
 
 @Composable
-private fun TopBottomLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
+private fun TopBottomLayout(
+    splitRatio: Float,
+    onSplitChange: (Float) -> Unit,
+    onBackCreated: (PreviewView) -> Unit,
+    onFrontCreated: (PreviewView) -> Unit
+) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             CameraPreviewView(
                 modifier = Modifier
                     .weight(splitRatio)
                     .fillMaxWidth(),
-                isFront = false
+                isFront = false,
+                onCreated = onBackCreated
             )
 
             Box(
@@ -341,9 +372,7 @@ private fun TopBottomLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
-                            val newRatio = (splitRatio + dragAmount.y / 1000f)
-                                .coerceIn(0.2f, 0.8f)
-                            onSplitChange(newRatio)
+                            onSplitChange((splitRatio + dragAmount.y / 1000f).coerceIn(0.2f, 0.8f))
                         }
                     }
             )
@@ -352,7 +381,8 @@ private fun TopBottomLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
                 modifier = Modifier
                     .weight(1f - splitRatio)
                     .fillMaxWidth(),
-                isFront = true
+                isFront = true,
+                onCreated = onFrontCreated
             )
         }
 
@@ -369,13 +399,15 @@ private fun TopBottomLayout(splitRatio: Float, onSplitChange: (Float) -> Unit) {
 }
 
 @Composable
-private fun FreeLayout() {
+private fun FreeLayout(
+    onBackCreated: (PreviewView) -> Unit,
+    onFrontCreated: (PreviewView) -> Unit
+) {
     Box(modifier = Modifier.fillMaxSize()) {
         CameraPreviewView(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp),
-            isFront = false
+            modifier = Modifier.fillMaxSize().padding(4.dp),
+            isFront = false,
+            onCreated = onBackCreated
         )
 
         CameraPreviewView(
@@ -384,7 +416,8 @@ private fun FreeLayout() {
                 .clip(RoundedCornerShape(12.dp))
                 .border(2.dp, Color.White, RoundedCornerShape(12.dp))
                 .align(Alignment.Center),
-            isFront = true
+            isFront = true,
+            onCreated = onFrontCreated
         )
 
         Text(
@@ -403,13 +436,15 @@ private fun FreeLayout() {
 @Composable
 private fun CameraPreviewView(
     modifier: Modifier,
-    isFront: Boolean
+    isFront: Boolean,
+    onCreated: (PreviewView) -> Unit
 ) {
     AndroidView(
         factory = { ctx ->
             PreviewView(ctx).apply {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
                 implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                onCreated(this)
             }
         },
         modifier = modifier
