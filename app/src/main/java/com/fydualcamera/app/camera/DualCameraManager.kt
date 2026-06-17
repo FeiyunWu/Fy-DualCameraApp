@@ -14,6 +14,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
 import androidx.camera.video.Recording
@@ -112,7 +113,7 @@ class DualCameraManager(
             .requireLensFacing(CameraSelector.LENS_FACING_BACK)
             .build()
 
-        val qualitySelector = QualitySelector.from(Quality.FHD, Quality.HD, Quality.SD)
+        val qualitySelector = QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD))
 
         frontPreview = Preview.Builder()
             .setTargetRotation(rotation)
