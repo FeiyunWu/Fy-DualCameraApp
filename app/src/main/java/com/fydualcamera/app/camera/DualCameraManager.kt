@@ -5,7 +5,6 @@ import android.content.Context
 import android.hardware.display.DisplayManager
 import android.util.Log
 import android.view.Display
-import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -44,8 +43,9 @@ class DualCameraManager(
     fun setLayoutMode(mode: LayoutMode) { layoutMode = mode }
 
     fun startCameras() {
-        ProcessCameraProvider.getInstance(context).addListener({
-            cameraProvider = it.get()
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener({
+            cameraProvider = future.get()
             rebindIfReady()
         }, ContextCompat.getMainExecutor(context))
     }
