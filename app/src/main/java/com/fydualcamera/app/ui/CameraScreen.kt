@@ -69,7 +69,6 @@ fun CameraScreen() {
     val mediaDao = remember { db.mediaDao() }
 
     var layoutMode by remember { mutableStateOf(LayoutMode.PIP) }
-    var isPaused by remember { mutableStateOf(false) }
     var splitRatio by remember { mutableFloatStateOf(0.5f) }
     var pipOffsetX by remember { mutableFloatStateOf(0f) }
     var pipOffsetY by remember { mutableFloatStateOf(0f) }
@@ -290,52 +289,16 @@ fun CameraScreen() {
             }
 
             if (isRecording) {
-                if (isPaused) {
-                    FloatingActionButton(
-                        onClick = {
-                            isPaused = false
-                            dualCameraManager.startRecording()
-                        },
-                        containerColor = Color(0xFFFF9800),
-                        modifier = Modifier.size(64.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.FiberManualRecord,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                } else {
-                    FloatingActionButton(
-                        onClick = {
-                            isPaused = true
-                            dualCameraManager.stopRecording()
-                        },
-                        containerColor = Color(0xFFF44336),
-                        modifier = Modifier.size(64.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Pause,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-
                 FloatingActionButton(
-                    onClick = {
-                        isPaused = false
-                        dualCameraManager.stopRecording()
-                    },
-                    containerColor = Color(0xFF757575),
-                    modifier = Modifier.size(48.dp)
+                    onClick = { dualCameraManager.stopRecording() },
+                    containerColor = Color(0xFFF44336),
+                    modifier = Modifier.size(64.dp)
                 ) {
                     Icon(
                         Icons.Default.Stop,
                         contentDescription = null,
-                        tint = Color.White
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             } else {

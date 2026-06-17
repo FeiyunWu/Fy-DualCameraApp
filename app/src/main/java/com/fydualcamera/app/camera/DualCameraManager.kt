@@ -42,8 +42,8 @@ class DualCameraManager(
     private var backCamera: Camera? = null
     private var frontPreview: Preview? = null
     private var backPreview: Preview? = null
-    private var frontVideoCapture: VideoCapture<*>? = null
-    private var backVideoCapture: VideoCapture<*>? = null
+    private var frontVideoCapture: VideoCapture<Recorder>? = null
+    private var backVideoCapture: VideoCapture<Recorder>? = null
     private var frontImageCapture: ImageCapture? = null
     private var backImageCapture: ImageCapture? = null
 
@@ -143,31 +143,46 @@ class DualCameraManager(
 
         if (frontPreviewView != null) {
             try {
-                frontPreview?.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
-                frontCamera = provider.bindToLifecycle(
-                    lifecycleOwner, frontSelector, frontPreview, frontVideoCapture, frontImageCapture
-                )
-                frontBound = true
+                val pv = frontPreview
+                val vc = frontVideoCapture
+                val ic = frontImageCapture
+                if (pv != null && vc != null && ic != null) {
+                    pv.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
+                    frontCamera = provider.bindToLifecycle(
+                        lifecycleOwner, frontSelector, pv, vc, ic
+                    )
+                    frontBound = true
+                }
             } catch (_: Exception) { }
         }
 
         if (backPreviewView != null) {
             try {
-                backPreview?.setSurfaceProvider(backPreviewView!!.surfaceProvider)
-                backCamera = provider.bindToLifecycle(
-                    lifecycleOwner, backSelector, backPreview, backVideoCapture, backImageCapture
-                )
-                backBound = true
+                val pv = backPreview
+                val vc = backVideoCapture
+                val ic = backImageCapture
+                if (pv != null && vc != null && ic != null) {
+                    pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
+                    backCamera = provider.bindToLifecycle(
+                        lifecycleOwner, backSelector, pv, vc, ic
+                    )
+                    backBound = true
+                }
             } catch (_: Exception) { }
         }
 
         if (!frontBound && backPreviewView != null) {
             try {
-                backPreview?.setSurfaceProvider(backPreviewView!!.surfaceProvider)
-                backCamera = provider.bindToLifecycle(
-                    lifecycleOwner, backSelector, backPreview, backVideoCapture, backImageCapture
-                )
-                backBound = true
+                val pv = backPreview
+                val vc = backVideoCapture
+                val ic = backImageCapture
+                if (pv != null && vc != null && ic != null) {
+                    pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
+                    backCamera = provider.bindToLifecycle(
+                        lifecycleOwner, backSelector, pv, vc, ic
+                    )
+                    backBound = true
+                }
             } catch (_: Exception) { }
         }
 
