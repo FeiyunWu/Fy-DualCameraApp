@@ -90,17 +90,16 @@ class DualCameraManager(
             .setTargetRotation(display?.rotation ?: android.view.Surface.ROTATION_0)
             .build()
 
-        val recorder = Recorder.Builder()
-            .setQualitySelector(qualitySelector)
-            .build()
-
-        frontVideoCapture = VideoCapture.Builder<Recorder>()
-            .setVideoFrameRate(30)
-            .build()
-
-        backVideoCapture = VideoCapture.Builder<Recorder>()
-            .setVideoFrameRate(30)
-            .build()
+        frontVideoCapture = VideoCapture.withOutput(
+            Recorder.Builder()
+                .setQualitySelector(qualitySelector)
+                .build()
+        )
+        backVideoCapture = VideoCapture.withOutput(
+            Recorder.Builder()
+                .setQualitySelector(qualitySelector)
+                .build()
+        )
 
         try {
             if (frontPreviewView != null) {
