@@ -1,5 +1,6 @@
 package com.fydualcamera.app.camera
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.util.Size
@@ -27,9 +28,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.core.util.Consumer
 import java.io.File
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+@SuppressLint("MissingPermission")
 class DualCameraManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner
@@ -248,49 +249,48 @@ class DualCameraManager(
     }
 
     fun startRecording() {
-        if (frontVideoCapture == null && backVideoCapture == null) return
+        val frontVc = frontVideoCapture
+        val backVc = backVideoCapture
+        val frontView = frontPreviewView
+        val backView = backPreviewView
+        if (frontVc == null && backVc == null) return
 
         val videoDir = FileUtils.getVideoOutputDir(context)
-
-        val frontFile = File(videoDir, FileUtils.generateVideoFileName("VID_FRONT"))
-        val backFile = File(videoDir, FileUtils.generateVideoFileName("VID_BACK"))
-
         val executor = ContextCompat.getMainExecutor(context)
 
-        if (frontVideoCapture != null && frontPreviewView != null) {
+        if (frontVc != null && frontView != null) {
             try {
-                val frontOptions = FileOutputOptions.Builder(frontFile).build()
-                frontRecording = frontVideoCapture?.output?.prepareRecording(context, frontOptions)
-                    ?.start(executor, Consumer<VideoRecordEvent> { event ->
-                        if (event is VideoRecordEvent.Finalize) {
-                            val entity = MediaEntity(
-                                fileName = frontFile.name,
-                                filePath = frontFile.absolutePath,
-                                type = "video_front",
-                                sizeBytes = frontFile.length()
-                            )
-                            onMediaSaved?.invoke(entity)
-                        }
-                    })
+                val frontFile = File(videoDir, FileUtils.generateVideoFileName("VID_FRONT"))
+                val options = FileOutputOptions.Builder(frontFile).build()
+                val pending = frontVc.output.prepareRecording(context, options)
+                frontRecording = pending.start(executor, Consumer { event: VideoRecordEvent ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        onMediaSaved?.invoke(MediaEntity(
+                            fileName = frontFile.name,
+                            filePath = frontFile.absolutePath,
+                            type = "video_front",
+                            sizeBytes = frontFile.length()
+                        ))
+                    }
+                })
             } catch (_: Exception) { }
         }
 
-        if (backVideoCapture != null && backPreviewView != null) {
+        if (backVc != null && backView != null) {
             try {
-                val backOptions = FileOutputOptions.Builder(backFile).build()
-                backRecording = backVideoCapture?.output?.prepareRecording(context, backOptions)
-                    ?.withAudioEnabled()
-                    ?.start(executor, Consumer<VideoRecordEvent> { event ->
-                        if (event is VideoRecordEvent.Finalize) {
-                            val entity = MediaEntity(
-                                fileName = backFile.name,
-                                filePath = backFile.absolutePath,
-                                type = "video_back",
-                                sizeBytes = backFile.length()
-                            )
-                            onMediaSaved?.invoke(entity)
-                        }
-                    })
+                val backFile = File(videoDir, FileUtils.generateVideoFileName("VID_BACK"))
+                val options = FileOutputOptions.Builder(backFile).build()
+                val pending = backVc.output.prepareRecording(context, options).withAudioEnabled()
+                backRecording = pending.start(executor, Consumer { event: VideoRecordEvent ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        onMediaSaved?.invoke(MediaEntity(
+                            fileName = backFile.name,
+                            filePath = backFile.absolutePath,
+                            type = "video_back",
+                            sizeBytes = backFile.length()
+                        ))
+                    }
+                })
             } catch (_: Exception) { }
         }
 
