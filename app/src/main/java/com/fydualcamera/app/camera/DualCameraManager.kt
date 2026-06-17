@@ -140,8 +140,8 @@ class DualCameraManager(
     }
 
     private fun getDisplayCompat(): Display? {
-        return context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-            ?.getDisplay(Display.DEFAULT_DISPLAY)
+        val manager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+        return manager?.getDisplay(0)
     }
 
     fun startRecording(outputPathFront: String, outputPathBack: String) {
