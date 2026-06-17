@@ -21,27 +21,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.FlipCameraAndroid
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,9 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fydualcamera.app.camera.DualCameraManager
-import com.fydualcamera.app.db.AppDatabase
 import com.fydualcamera.app.layout.LayoutMode
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -64,16 +51,11 @@ fun CameraScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val dualCameraManager = remember { DualCameraManager(context, lifecycleOwner) }
-    val scope = rememberCoroutineScope()
-    val db = remember { AppDatabase.getInstance(context) }
-    val mediaDao = remember { db.mediaDao() }
 
     var layoutMode by remember { mutableStateOf(LayoutMode.PIP) }
     var splitRatio by remember { mutableFloatStateOf(0.5f) }
     var pipOffsetX by remember { mutableFloatStateOf(0f) }
     var pipOffsetY by remember { mutableFloatStateOf(0f) }
-
-    val isRecording by dualCameraManager.isRecording.collectAsState()
 
     // Create PreviewViews ONCE and reuse across layouts
     val backPreview = remember {
@@ -93,13 +75,6 @@ fun CameraScreen() {
     LaunchedEffect(Unit) {
         dualCameraManager.backPreviewView = backPreview
         dualCameraManager.frontPreviewView = frontPreview
-    }
-
-    // Handle media saved -> insert into DB
-    LaunchedEffect(Unit) {
-        dualCameraManager.onMediaSaved = { entity ->
-            scope.launch { mediaDao.insert(entity) }
-        }
     }
 
     val requiredPermissions = arrayOf(
@@ -285,59 +260,7 @@ fun CameraScreen() {
             }
         }
 
-        // Bottom controls
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0x99000000))
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { }) {
-                Icon(
-                    Icons.Default.FlipCameraAndroid,
-                    contentDescription = null,
-                    tint = Color.White
-                )
-            }
 
-            if (isRecording) {
-                FloatingActionButton(
-                    onClick = { dualCameraManager.stopRecording() },
-                    containerColor = Color(0xFFF44336),
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Stop,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            } else {
-                FloatingActionButton(
-                    onClick = { dualCameraManager.startRecording() },
-                    containerColor = Color(0xFFF44336),
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Default.FiberManualRecord,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-
-            IconButton(onClick = { dualCameraManager.takePhoto() }) {
-                Icon(
-                    Icons.Default.CameraAlt,
-                    contentDescription = null,
-                    tint = Color.White
-                )
-            }
-        }
     }
 }
 
