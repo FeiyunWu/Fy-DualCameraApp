@@ -22,24 +22,20 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.util.Consumer
 import androidx.lifecycle.LifecycleOwner
 import com.fydualcamera.app.db.MediaEntity
 import com.fydualcamera.app.layout.LayoutMode
 import com.fydualcamera.app.util.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import androidx.core.util.Consumer
 import java.io.File
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 @SuppressLint("MissingPermission")
 class DualCameraManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner
 ) {
-    private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-
     private var cameraProvider: ProcessCameraProvider? = null
 
     private var frontCamera: Camera? = null
@@ -65,6 +61,7 @@ class DualCameraManager(
 
     private var frontRecording: Recording? = null
     private var backRecording: Recording? = null
+    private var isRecordingActive = false
 
     var onMediaSaved: ((MediaEntity) -> Unit)? = null
 
@@ -74,12 +71,7 @@ class DualCameraManager(
     private val _isDualCameraSupported = MutableStateFlow(true)
     val isDualCameraSupported: StateFlow<Boolean> = _isDualCameraSupported
 
-    private var quality: Quality = Quality.FHD
     private var layoutMode: LayoutMode = LayoutMode.PIP
-
-    fun setQuality(level: Quality) {
-        quality = level
-    }
 
     fun setLayoutMode(mode: LayoutMode) {
         layoutMode = mode
@@ -121,109 +113,84 @@ class DualCameraManager(
             .setTargetRotation(rotation)
             .build()
 
-        // Always bind Preview-only for both cameras first (most reliable)
+        frontImageCapture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setTargetRotation(rotation)
+            .build()
+
+        backImageCapture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setTargetRotation(rotation)
+            .build()
+
+        val qualitySelector = QualitySelector.from(
+            Quality.FHD,
+            FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)
+        )
+
+        frontVideoCapture = VideoCapture.withOutput(
+            Recorder.Builder().setQualitySelector(qualitySelector).build()
+        )
+        backVideoCapture = VideoCapture.withOutput(
+            Recorder.Builder().setQualitySelector(qualitySelector).build()
+        )
+
         var frontBound = false
         var backBound = false
 
         if (frontPreviewView != null) {
-            try {
-                val pv = frontPreview
-                if (pv != null) {
+            val pv = frontPreview
+            val vc = frontVideoCapture
+            val ic = frontImageCapture
+            if (pv != null && vc != null && ic != null) {
+                try {
                     pv.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
                     frontCamera = provider.bindToLifecycle(
-                        lifecycleOwner, frontSelector, pv
+                        lifecycleOwner, frontSelector, pv, vc, ic
                     )
                     frontBound = true
+                } catch (e: Exception) {
+                    Log.e("DualCamera", "Front all-3 failed: ${e.message}")
+                    frontVideoCapture = null
+                    frontImageCapture = null
+                    try {
+                        pv.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
+                        frontCamera = provider.bindToLifecycle(
+                            lifecycleOwner, frontSelector, pv
+                        )
+                        frontBound = true
+                    } catch (e2: Exception) {
+                        Log.e("DualCamera", "Front preview failed: ${e2.message}")
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e("DualCamera", "Front bind failed: ${e.message}")
             }
         }
 
         if (backPreviewView != null) {
-            try {
-                val pv = backPreview
-                if (pv != null) {
+            val pv = backPreview
+            val vc = backVideoCapture
+            val ic = backImageCapture
+            if (pv != null && vc != null && ic != null) {
+                try {
                     pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
                     backCamera = provider.bindToLifecycle(
-                        lifecycleOwner, backSelector, pv
+                        lifecycleOwner, backSelector, pv, vc, ic
                     )
                     backBound = true
-                }
-            } catch (e: Exception) {
-                Log.e("DualCamera", "Back bind failed: ${e.message}")
-            }
-        }
-
-        // Try to add ImageCapture for back camera if back preview was bound
-        if (backBound) {
-            try {
-                val ic = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .setTargetRotation(rotation)
-                    .build()
-                backImageCapture = ic
-                // Rebinding with Preview + ImageCapture will briefly flash the preview
-                val pv = backPreview
-                val pvView = backPreviewView
-                if (pv != null && pvView != null) {
-                    pv.setSurfaceProvider(pvView.surfaceProvider)
-                    backCamera = provider.bindToLifecycle(
-                        lifecycleOwner, backSelector, pv, ic
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("DualCamera", "Back ImageCapture add failed: ${e.message}")
-                backImageCapture = null
-            }
-        }
-
-        if (frontBound) {
-            try {
-                val ic = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .setTargetRotation(rotation)
-                    .build()
-                frontImageCapture = ic
-                val pv = frontPreview
-                val pvView = frontPreviewView
-                if (pv != null && pvView != null) {
-                    pv.setSurfaceProvider(pvView.surfaceProvider)
-                    frontCamera = provider.bindToLifecycle(
-                        lifecycleOwner, frontSelector, pv, ic
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("DualCamera", "Front ImageCapture add failed: ${e.message}")
-                frontImageCapture = null
-            }
-        }
-
-        // Try to add VideoCapture for back camera
-        if (backBound) {
-            try {
-                val qualitySelector = QualitySelector.from(
-                    Quality.FHD,
-                    FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)
-                )
-                val vc = VideoCapture.withOutput(
-                    Recorder.Builder().setQualitySelector(qualitySelector).build()
-                )
-                backVideoCapture = vc
-                val ic = backImageCapture
-                if (ic != null) {
-                    val pv = backPreview
-                    val pvView = backPreviewView
-                    if (pv != null && pvView != null) {
-                        pv.setSurfaceProvider(pvView.surfaceProvider)
+                } catch (e: Exception) {
+                    Log.e("DualCamera", "Back all-3 failed: ${e.message}")
+                    backVideoCapture = null
+                    backImageCapture = null
+                    try {
+                        pv.setSurfaceProvider(backPreviewView!!.surfaceProvider)
                         backCamera = provider.bindToLifecycle(
-                            lifecycleOwner, backSelector, pv, ic, vc
+                            lifecycleOwner, backSelector, pv
                         )
+                        backBound = true
+                    } catch (e2: Exception) {
+                        Log.e("DualCamera", "Back preview failed: ${e2.message}")
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("DualCamera", "Back VideoCapture add failed: ${e.message}")
-                backVideoCapture = null
             }
         }
 
@@ -241,54 +208,67 @@ class DualCameraManager(
         val dir = FileUtils.getPhotoOutputDir(context)
         val executor = ContextCompat.getMainExecutor(context)
 
-        if (frontImageCapture != null && frontPreviewView != null) {
-            try {
-                val file = File(dir, FileUtils.generatePhotoFileName("IMG_FRONT"))
-                val options = ImageCapture.OutputFileOptions.Builder(file).build()
-                frontImageCapture?.takePicture(
-                    options, executor,
-                    object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                            val entity = MediaEntity(
-                                fileName = file.name,
-                                filePath = file.absolutePath,
-                                type = "photo_front",
-                                sizeBytes = file.length()
-                            )
-                            onMediaSaved?.invoke(entity)
+        frontImageCapture?.let { ic ->
+            val view = frontPreviewView
+            if (view != null) {
+                try {
+                    val file = File(dir, FileUtils.generatePhotoFileName("IMG_FRONT"))
+                    val options = ImageCapture.OutputFileOptions.Builder(file).build()
+                    ic.takePicture(options, executor,
+                        object : ImageCapture.OnImageSavedCallback {
+                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                val entity = MediaEntity(
+                                    fileName = file.name,
+                                    filePath = file.absolutePath,
+                                    type = "photo_front",
+                                    sizeBytes = file.length()
+                                )
+                                Log.d("DualCamera", "Photo saved: ${file.absolutePath}")
+                                onMediaSaved?.invoke(entity)
+                            }
+                            override fun onError(exception: ImageCaptureException) {
+                                Log.e("DualCamera", "Front photo error: ${exception.message}")
+                            }
                         }
-
-                        override fun onError(exception: ImageCaptureException) { }
-                    }
-                )
-            } catch (_: Exception) { }
+                    )
+                } catch (e: Exception) {
+                    Log.e("DualCamera", "Front photo exception: ${e.message}")
+                }
+            }
         }
 
-        if (backImageCapture != null && backPreviewView != null) {
-            try {
-                val file = File(dir, FileUtils.generatePhotoFileName("IMG_BACK"))
-                val options = ImageCapture.OutputFileOptions.Builder(file).build()
-                backImageCapture?.takePicture(
-                    options, executor,
-                    object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                            val entity = MediaEntity(
-                                fileName = file.name,
-                                filePath = file.absolutePath,
-                                type = "photo_back",
-                                sizeBytes = file.length()
-                            )
-                            onMediaSaved?.invoke(entity)
+        backImageCapture?.let { ic ->
+            val view = backPreviewView
+            if (view != null) {
+                try {
+                    val file = File(dir, FileUtils.generatePhotoFileName("IMG_BACK"))
+                    val options = ImageCapture.OutputFileOptions.Builder(file).build()
+                    ic.takePicture(options, executor,
+                        object : ImageCapture.OnImageSavedCallback {
+                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                val entity = MediaEntity(
+                                    fileName = file.name,
+                                    filePath = file.absolutePath,
+                                    type = "photo_back",
+                                    sizeBytes = file.length()
+                                )
+                                Log.d("DualCamera", "Photo saved: ${file.absolutePath}")
+                                onMediaSaved?.invoke(entity)
+                            }
+                            override fun onError(exception: ImageCaptureException) {
+                                Log.e("DualCamera", "Back photo error: ${exception.message}")
+                            }
                         }
-
-                        override fun onError(exception: ImageCaptureException) { }
-                    }
-                )
-            } catch (_: Exception) { }
+                    )
+                } catch (e: Exception) {
+                    Log.e("DualCamera", "Back photo exception: ${e.message}")
+                }
+            }
         }
     }
 
     fun startRecording() {
+        if (isRecordingActive) return
         val frontVc = frontVideoCapture
         val backVc = backVideoCapture
         val frontView = frontPreviewView
@@ -298,50 +278,73 @@ class DualCameraManager(
         val videoDir = FileUtils.getVideoOutputDir(context)
         val executor = ContextCompat.getMainExecutor(context)
 
-        if (frontVc != null && frontView != null) {
-            try {
-                val frontFile = File(videoDir, FileUtils.generateVideoFileName("VID_FRONT"))
-                val options = FileOutputOptions.Builder(frontFile).build()
-                val pending = frontVc.output.prepareRecording(context, options)
-                frontRecording = pending.start(executor, Consumer<VideoRecordEvent> { event ->
-                    if (event is VideoRecordEvent.Finalize) {
-                        onMediaSaved?.invoke(MediaEntity(
-                            fileName = frontFile.name,
-                            filePath = frontFile.absolutePath,
-                            type = "video_front",
-                            sizeBytes = frontFile.length()
-                        ))
-                    }
-                })
-            } catch (_: Exception) { }
+        frontVc?.let { vc ->
+            val view = frontView
+            if (view != null) {
+                try {
+                    val file = File(videoDir, FileUtils.generateVideoFileName("VID_FRONT"))
+                    val options = FileOutputOptions.Builder(file).build()
+                    val pending = vc.output.prepareRecording(context, options)
+                    frontRecording = pending.start(executor, Consumer<VideoRecordEvent> { event ->
+                        if (event is VideoRecordEvent.Finalize) {
+                            Log.d("DualCamera", "Front video finalize: error=${event.error}")
+                            onMediaSaved?.invoke(MediaEntity(
+                                fileName = file.name,
+                                filePath = file.absolutePath,
+                                type = "video_front",
+                                sizeBytes = file.length()
+                            ))
+                        }
+                    })
+                } catch (e: Exception) {
+                    Log.e("DualCamera", "Front recording start failed: ${e.message}")
+                }
+            }
         }
 
-        if (backVc != null && backView != null) {
-            try {
-                val backFile = File(videoDir, FileUtils.generateVideoFileName("VID_BACK"))
-                val options = FileOutputOptions.Builder(backFile).build()
-                val pending = backVc.output.prepareRecording(context, options).withAudioEnabled()
-                backRecording = pending.start(executor, Consumer<VideoRecordEvent> { event ->
-                    if (event is VideoRecordEvent.Finalize) {
-                        onMediaSaved?.invoke(MediaEntity(
-                            fileName = backFile.name,
-                            filePath = backFile.absolutePath,
-                            type = "video_back",
-                            sizeBytes = backFile.length()
-                        ))
-                    }
-                })
-            } catch (_: Exception) { }
+        backVc?.let { vc ->
+            val view = backView
+            if (view != null) {
+                try {
+                    val file = File(videoDir, FileUtils.generateVideoFileName("VID_BACK"))
+                    val options = FileOutputOptions.Builder(file).build()
+                    val pending = vc.output.prepareRecording(context, options).withAudioEnabled()
+                    backRecording = pending.start(executor, Consumer<VideoRecordEvent> { event ->
+                        if (event is VideoRecordEvent.Finalize) {
+                            Log.d("DualCamera", "Back video finalize: error=${event.error}")
+                            onMediaSaved?.invoke(MediaEntity(
+                                fileName = file.name,
+                                filePath = file.absolutePath,
+                                type = "video_back",
+                                sizeBytes = file.length()
+                            ))
+                        }
+                    })
+                } catch (e: Exception) {
+                    Log.e("DualCamera", "Back recording start failed: ${e.message}")
+                }
+            }
         }
 
+        isRecordingActive = true
         _isRecording.value = true
     }
 
     fun stopRecording() {
-        try { frontRecording?.stop() } catch (_: Exception) { }
-        try { backRecording?.stop() } catch (_: Exception) { }
+        if (!isRecordingActive) return
+        try {
+            frontRecording?.stop()
+        } catch (e: Exception) {
+            Log.e("DualCamera", "Stop front recording error: ${e.message}")
+        }
+        try {
+            backRecording?.stop()
+        } catch (e: Exception) {
+            Log.e("DualCamera", "Stop back recording error: ${e.message}")
+        }
         frontRecording = null
         backRecording = null
+        isRecordingActive = false
         _isRecording.value = false
     }
 
@@ -374,10 +377,6 @@ class DualCameraManager(
     }
 
     fun release() {
-        try { frontRecording?.stop() } catch (_: Exception) { }
-        try { backRecording?.stop() } catch (_: Exception) { }
-        frontRecording = null
-        backRecording = null
-        cameraExecutor.shutdown()
+        stopRecording()
     }
 }
