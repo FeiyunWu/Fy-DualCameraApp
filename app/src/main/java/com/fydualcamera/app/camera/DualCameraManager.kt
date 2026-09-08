@@ -5,6 +5,7 @@ import android.content.Context
 import android.hardware.display.DisplayManager
 import android.util.Log
 import android.view.Display
+import android.view.View
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ConcurrentCamera
 import androidx.camera.core.UseCaseGroup
@@ -84,9 +85,13 @@ class DualCameraManager(
                     lifecycleOwner
                 )
             ))
+            frontPreviewView?.visibility = View.VISIBLE
+            backPreviewView?.visibility = View.VISIBLE
             _isDualCameraSupported.value = true
         } catch (e: Exception) {
             Log.e(TAG, "Concurrent camera bind failed", e)
+            frontPreviewView?.visibility = View.INVISIBLE
+            backPreviewView?.visibility = View.VISIBLE
             _isDualCameraSupported.value = false
             try {
                 provider.bindToLifecycle(lifecycleOwner, backSelector, backPreview)
