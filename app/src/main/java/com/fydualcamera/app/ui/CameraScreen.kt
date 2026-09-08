@@ -210,7 +210,7 @@ fun CameraScreen() {
             // Layout mode labels
             if (layoutMode == LayoutMode.LEFT_RIGHT) {
                 Text(
-                    text = "← 拖动分割线调整比例 →",
+                    text = "Drag the divider to adjust the ratio",
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier
@@ -221,7 +221,7 @@ fun CameraScreen() {
             }
             if (layoutMode == LayoutMode.TOP_BOTTOM) {
                 Text(
-                    text = "拖动分割线调整比例",
+                    text = "Drag the divider to adjust the ratio",
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier
@@ -232,7 +232,7 @@ fun CameraScreen() {
             }
             if (layoutMode == LayoutMode.FREE) {
                 Text(
-                    text = "自由布局: 拖拽移动, 缩放调整大小",
+                    text = "Free layout: drag to move and resize",
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier

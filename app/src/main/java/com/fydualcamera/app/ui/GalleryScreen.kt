@@ -14,18 +14,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun GalleryScreen() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Text("Gallery", style = MaterialTheme.typography.headlineMedium)
         Text(
-            text = "作品库",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Text(
-            text = "此处将显示录制的视频和拍摄的照片",
+            "Recorded videos and captured photos will appear here.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -35,18 +30,13 @@ fun GalleryScreen() {
 @Composable
 fun SettingsScreen() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Text("Settings", style = MaterialTheme.typography.headlineMedium)
         Text(
-            text = "设置",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Text(
-            text = "分辨率、存储、美颜等设置",
+            "Resolution, storage and filter settings.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

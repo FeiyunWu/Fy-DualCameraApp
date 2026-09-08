@@ -19,14 +19,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 enum class Screen(val label: String) {
-    CAMERA("拍摄"),
-    GALLERY("作品库")
+    CAMERA("Camera"),
+    GALLERY("Gallery")
 }
 
 @Composable
 fun MainScreen() {
     var currentScreen by remember { mutableStateOf(Screen.CAMERA) }
-
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -34,27 +33,21 @@ fun MainScreen() {
                     selected = currentScreen == Screen.CAMERA,
                     onClick = { currentScreen = Screen.CAMERA },
                     icon = { Icon(Icons.Default.Videocam, contentDescription = null) },
-                    label = { Text("拍摄") }
+                    label = { Text(Screen.CAMERA.label) }
                 )
                 NavigationBarItem(
                     selected = currentScreen == Screen.GALLERY,
                     onClick = { currentScreen = Screen.GALLERY },
                     icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
-                    label = { Text("作品库") }
+                    label = { Text(Screen.GALLERY.label) }
                 )
-
             }
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+        Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when (currentScreen) {
                 Screen.CAMERA -> CameraScreen()
                 Screen.GALLERY -> GalleryScreen()
-
             }
         }
     }

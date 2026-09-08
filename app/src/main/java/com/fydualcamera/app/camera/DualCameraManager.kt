@@ -6,6 +6,8 @@ import android.hardware.display.DisplayManager
 import android.util.Log
 import android.view.Display
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ConcurrentCamera
+import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -59,47 +61,47 @@ class DualCameraManager(
     private fun bindCameras(provider: ProcessCameraProvider) {
         provider.unbindAll()
         val rotation = getDisplayCompat()?.rotation ?: 0
+        val frontSelector = CameraSelector.Builder()
+            .requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
+        val backSelector = CameraSelector.Builder()
+            .requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+        val frontPreview = Preview.Builder().setTargetRotation(rotation).build()
+        val backPreview = Preview.Builder().setTargetRotation(rotation).build()
+        frontPreview.setSurfaceProvider(frontPreviewView?.surfaceProvider)
+        backPreview.setSurfaceProvider(backPreviewView?.surfaceProvider)
 
-        var frontOk = false
-        var backOk = false
-
-        if (frontPreviewView != null) {
-            try {
-                val preview = Preview.Builder().setTargetRotation(rotation).build()
-                preview.setSurfaceProvider(frontPreviewView!!.surfaceProvider)
-                provider.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build(),
-                    preview
+        try {
+            // Both cameras must be bound through CameraX concurrent mode.
+            provider.bindToLifecycle(listOf(
+                ConcurrentCamera.SingleCameraConfig(
+                    backSelector,
+                    UseCaseGroup.Builder().addUseCase(backPreview).build(),
+                    lifecycleOwner
+                ),
+                ConcurrentCamera.SingleCameraConfig(
+                    frontSelector,
+                    UseCaseGroup.Builder().addUseCase(frontPreview).build(),
+                    lifecycleOwner
                 )
-                frontOk = true
-            } catch (e: Exception) {
-                Log.e(TAG, "Front bind failed", e)
+            ))
+            _isDualCameraSupported.value = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Concurrent camera bind failed", e)
+            _isDualCameraSupported.value = false
+            try {
+                provider.bindToLifecycle(lifecycleOwner, backSelector, backPreview)
+            } catch (fallbackError: Exception) {
+                Log.e(TAG, "Back camera fallback failed", fallbackError)
             }
         }
-
-        if (backPreviewView != null) {
-            try {
-                val preview = Preview.Builder().setTargetRotation(rotation).build()
-                preview.setSurfaceProvider(backPreviewView!!.surfaceProvider)
-                provider.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build(),
-                    preview
-                )
-                backOk = true
-            } catch (e: Exception) {
-                Log.e(TAG, "Back bind failed", e)
-            }
-        }
-
-        _isDualCameraSupported.value = frontOk && backOk
     }
-
     private fun getDisplayCompat(): Display? {
         val manager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
         return manager?.getDisplay(0)
     }
 
-    fun release() {}
+    fun release() {
+        cameraProvider?.unbindAll()
+        cameraProvider = null
+    }
 }
